@@ -19,7 +19,7 @@ from loguru import logger
 
 from agents.budget_agent import BudgetAgent
 from agents.replan_agent import ReplanAgent
-from config.settings import settings
+from config.settings import is_force_mock, settings
 from models.schemas import PlanningState, TravelPlanState
 from observability import get_tracer
 
@@ -44,7 +44,11 @@ class BudgetLoopController:
 
     @staticmethod
     def _agent_mode_enabled() -> bool:
-        return settings.REPLAN_MODE == "agent" and settings.LLM_PROVIDER != "mock"
+        return (
+            settings.REPLAN_MODE == "agent"
+            and settings.LLM_PROVIDER != "mock"
+            and not is_force_mock()
+        )
 
     async def run(self, state: TravelPlanState) -> TravelPlanState:
         state.max_adjustments = self.max_retries

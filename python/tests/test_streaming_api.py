@@ -136,6 +136,45 @@ async def test_stream_rejects_bad_style():
     assert status == 422
 
 
+# ━━━━━━ 真实模式钥匙 ━━━━━━
+
+
+async def test_real_mode_gating_rules(monkeypatch):
+    from api.streaming import real_mode_allowed
+    from config.settings import settings
+
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "deepseek")
+    monkeypatch.setattr(settings, "LLM_API_KEY", "sk-test")
+    monkeypatch.setattr(settings, "DEMO_ACCESS_CODE", "secret")
+    assert real_mode_allowed("secret") is True
+    assert real_mode_allowed("wrong") is False
+    assert real_mode_allowed("") is False
+
+    monkeypatch.setattr(settings, "DEMO_ACCESS_CODE", "")
+    assert real_mode_allowed("") is True  # 未设口令 = 本地开发, 不限制
+
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "mock")
+    assert real_mode_allowed("secret") is False  # 没配真实 LLM 永远 mock
+
+
+async def test_wrong_key_degrades_to_mock_end_to_end(monkeypatch):
+    """无钥匙的请求: 即使服务器配了真实 LLM, 也全程 mock 完成 (不打 API)。"""
+    from config.settings import settings
+
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "deepseek")
+    monkeypatch.setattr(settings, "LLM_API_KEY", "sk-fake-never-called")
+    monkeypatch.setattr(settings, "DEMO_ACCESS_CODE", "secret")
+
+    status, events = await _collect_events(_payload(access_key="wrong"))
+    assert status == 200
+    started = next(e for e in events if e["type"] == "pipeline_started")
+    assert started["data"]["mode"] == "mock"
+    assert any(e["type"] == "plan_completed" for e in events)
+    assert any(e["type"] == "summary_delta" for e in events)  # 走的本地模板
+    # 没有任何 Agent 因为调假 key 而失败
+    assert not any(e["type"] == "agent_failed" for e in events)
+
+
 async def test_static_index_served():
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

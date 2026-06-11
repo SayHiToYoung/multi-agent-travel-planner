@@ -18,7 +18,7 @@ from typing import Any, Optional, Type, TypeVar
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
-from config.settings import settings
+from config.settings import is_force_mock, settings
 from events import emit
 from events.messages import completed_message, started_message
 from models.schemas import TravelPlanState
@@ -56,7 +56,8 @@ class BaseAgent(ABC):
 
     @property
     def is_mock(self) -> bool:
-        return self._llm_provider == "mock"
+        # is_force_mock(): 公网 demo 中无访问钥匙的请求被强制降级 (每请求隔离)
+        return self._llm_provider == "mock" or is_force_mock()
 
     # ── 模板方法: 子类不要覆盖 ──────────────────────
 

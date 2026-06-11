@@ -19,7 +19,7 @@ from typing import AsyncIterator
 from loguru import logger
 from pydantic import BaseModel, Field, field_validator
 
-from config.settings import settings
+from config.settings import reset_force_mock, set_force_mock, settings
 from events import Event, QueueEmitter, reset_emitter, set_emitter
 from models.schemas import TravelPlanState, TravelStyle, UserPreferences
 
@@ -43,6 +43,7 @@ class StreamPlanRequest(BaseModel):
     num_travelers: int = Field(1, ge=1, le=10)
     interests: list[str] = Field(default_factory=list, max_length=8)
     notes: str = Field("", max_length=500)
+    access_key: str = Field("", max_length=64, description="真实模式钥匙 (URL ?key= 透传)")
 
     @field_validator("interests")
     @classmethod
@@ -74,6 +75,22 @@ class StreamPlanRequest(BaseModel):
         if days > 14:
             return "演示版最长支持 14 天行程"
         return None
+
+
+# ── 真实模式门禁 ──────────────────────────────────
+
+def real_mode_allowed(access_key: str) -> bool:
+    """是否允许本次请求使用真实 LLM。
+
+    规则: 未配置真实 LLM → 永远 mock;
+          未设置 DEMO_ACCESS_CODE → 对所有人开放 (本地开发);
+          设置了 → 仅持有钥匙 (URL ?key=) 的请求走真实 LLM, 其余降级 mock。
+    """
+    if settings.LLM_PROVIDER == "mock" or not settings.LLM_API_KEY:
+        return False
+    if not settings.DEMO_ACCESS_CODE:
+        return True
+    return access_key == settings.DEMO_ACCESS_CODE
 
 
 # ── 事件序列化 ────────────────────────────────────
@@ -154,9 +171,9 @@ def _mock_summary(plan: dict) -> str:
     )
 
 
-async def stream_summary(plan: dict) -> AsyncIterator[str]:
+async def stream_summary(plan: dict, use_real: bool) -> AsyncIterator[str]:
     """逐段产出面向用户的总结文本。真实模式走 LLM 流式接口, mock 走本地模板。"""
-    if settings.LLM_PROVIDER == "mock" or not settings.LLM_API_KEY:
+    if not use_real:
         text = _mock_summary(plan)
         for i in range(0, len(text), 6):
             yield text[i:i + 6]
@@ -208,9 +225,15 @@ async def plan_event_stream(req: StreamPlanRequest) -> AsyncIterator[str]:
     async with _semaphore:
         queue: asyncio.Queue[Event] = asyncio.Queue()
         token = set_emitter(QueueEmitter(queue))
+        use_real = real_mode_allowed(req.access_key)
+        mock_token = None if use_real else set_force_mock()
         pipeline_task: asyncio.Task | None = None
         try:
-            yield sse_format(_ev("pipeline_started", message="已收到你的旅行期待，7 个 Agent 开始协作"))
+            yield sse_format(_ev(
+                "pipeline_started",
+                message="已收到你的旅行期待，7 个 Agent 开始协作",
+                data={"mode": "real" if use_real else "mock"},
+            ))
 
             prefs = UserPreferences(
                 budget=req.budget,
@@ -245,7 +268,7 @@ async def plan_event_stream(req: StreamPlanRequest) -> AsyncIterator[str]:
 
             # 摘要流: LLM 失败不致命, 跳过即可
             try:
-                async for delta in stream_summary(plan):
+                async for delta in stream_summary(plan, use_real):
                     yield sse_format(_ev("summary_delta", data={"delta": delta}))
             except Exception as exc:
                 logger.warning(f"[Stream] 摘要生成失败, 跳过: {exc}")
@@ -261,5 +284,7 @@ async def plan_event_stream(req: StreamPlanRequest) -> AsyncIterator[str]:
         finally:
             if pipeline_task and not pipeline_task.done():
                 pipeline_task.cancel()
+            if mock_token is not None:
+                reset_force_mock(mock_token)
             reset_emitter(token)
             yield sse_format(_ev("stream_closed"))

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import os
 from pathlib import Path
 
@@ -57,5 +58,27 @@ class Settings:
 
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
+    # 防刷口令: 设置后 Streamlit 需输入访问码 / Web 端需 URL 带 ?key= 才走真实 LLM
+    DEMO_ACCESS_CODE: str = os.getenv("DEMO_ACCESS_CODE", "")
+
 
 settings = Settings()
+
+
+# ── 每请求的 LLM 强制降级开关 ──────────────────────
+# 公网 demo 中未持有访问钥匙的请求被强制走 mock。
+# 用 contextvar 而非改写全局 settings: 并发请求间互不污染 (asyncio Task 自动继承拷贝)。
+
+_force_mock: contextvars.ContextVar[bool] = contextvars.ContextVar("force_mock_llm", default=False)
+
+
+def set_force_mock() -> contextvars.Token:
+    return _force_mock.set(True)
+
+
+def reset_force_mock(token: contextvars.Token) -> None:
+    _force_mock.reset(token)
+
+
+def is_force_mock() -> bool:
+    return _force_mock.get()

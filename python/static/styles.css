@@ -169,3 +169,6 @@ footer p { margin: 0; }
 /* ── 动态渲染补充样式 ── */
 .result-warnings { margin: 8px 0 0; color: #b3622d; font-size: 9px; line-height: 1.5; }
 .result-warnings:empty { display: none; }
+
+/* hidden 属性必须永远生效 (修复 .error-view 等带 display 规则的视图无法隐藏的 bug) */
+[hidden] { display: none !important; }

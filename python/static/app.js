@@ -91,7 +91,11 @@ function updateProgress() {
 function handleEvent(event) {
   const { type, agent, message, data } = event;
 
-  if (type === "agent_started") {
+  if (type === "pipeline_started") {
+    // 真实模式钥匙: 后端告知本次实际运行模式
+    document.querySelector("#summary-engine").textContent =
+      data && data.mode === "real" ? "DeepSeek" : "演示模式";
+  } else if (type === "agent_started") {
     markAgent(agent, "running", message || "执行中…");
   } else if (type === "agent_completed") {
     completedAgents.add(agent);
@@ -259,6 +263,8 @@ function collectPayload() {
     num_travelers: travelers,
     interests,
     notes: form.elements.notes.value.trim(),
+    // 真实模式钥匙: 链接带 ?key=口令 时才走真实 LLM, 其余访客自动用演示模式
+    access_key: new URLSearchParams(location.search).get("key") || "",
   };
 }
 
