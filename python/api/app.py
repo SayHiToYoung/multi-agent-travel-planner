@@ -8,13 +8,19 @@ FastAPI 后端 —— 提供 REST API 接口。
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from config.settings import settings
 from models.schemas import TravelPlanState, TravelStyle, UserPreferences
 from orchestrator.pipeline import TravelPlanningPipeline
+
+from .streaming import StreamPlanRequest, plan_event_stream
 
 app = FastAPI(
     title="多Agent智能旅游行程规划系统",
@@ -121,6 +127,28 @@ async def create_plan_full(req: PlanRequest):
     pipeline = TravelPlanningPipeline()
     state = await pipeline.run(prefs)
     return state.model_dump()
+
+
+@app.post("/api/plan/stream")
+async def create_plan_stream(req: StreamPlanRequest):
+    """SSE 流式规划: 实时推送 Agent 执行事件 + LLM 摘要流 + 最终结果。"""
+    if error := req.validate_trip():
+        raise HTTPException(status_code=400, detail=error)
+    return StreamingResponse(
+        plan_event_stream(req),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 反向代理 (nginx) 不缓冲 SSE
+        },
+    )
+
+
+# 静态前端 (WanderWarm)。必须在所有 API 路由之后挂载, 否则 / 会吞掉 /api/*
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+if _STATIC_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="static")
 
 
 def start():

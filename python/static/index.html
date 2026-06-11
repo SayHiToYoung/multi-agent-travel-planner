@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="WanderWarm 多 Agent 智能旅行规划演示">
+  <title>WanderWarm - 多 Agent 智能旅行规划</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body data-mode="idle">
+  <canvas id="particle-canvas" aria-hidden="true"></canvas>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="brand" href="#">
+      <span class="brand-mark">W</span>
+      <span><strong>WanderWarm</strong><small>AI travel, thoughtfully planned</small></span>
+    </a>
+    <nav class="header-actions" aria-label="页面导航">
+      <span class="live-pill"><i></i> DeepSeek 驱动</span>
+      <a class="github-button" href="https://github.com/SayHiToYoung/multi-agent-travel-planner" target="_blank" rel="noreferrer">查看源码 <span>↗</span></a>
+    </nav>
+  </header>
+
+  <main class="page-shell">
+    <section class="hero-copy">
+      <span class="eyebrow">MULTI-AGENT TRAVEL STUDIO</span>
+      <h1>把期待交给 AI，<br><em>把旅程留给自己。</em></h1>
+      <p>7 个智能 Agent 协作完成目的地推荐、航班酒店搜索、每日行程和预算优化。你可以看见每一步，理解每一个选择。</p>
+      <div class="hero-metrics" aria-label="项目能力">
+        <div><strong>7</strong><span>协作 Agent</span></div>
+        <div><strong>3×</strong><span>并行搜索</span></div>
+        <div><strong>RAG</strong><span>知识增强</span></div>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <aside class="request-card panel">
+        <div class="panel-heading">
+          <div><span class="step-number">01</span><div><p>告诉我们你的期待</p><h2>规划一段新旅程</h2></div></div>
+          <span class="required-note">* 必填</span>
+        </div>
+
+        <form id="travel-form">
+          <div class="field-grid two-cols">
+            <label class="field"><span>从哪里出发 *</span><div class="input-shell"><i>⌖</i><input name="departure_city" value="上海" maxlength="30" required></div></label>
+            <label class="field"><span>旅行预算 *</span><div class="input-shell"><i>¥</i><input name="budget" type="number" value="12000" min="1000" max="500000" required></div></label>
+          </div>
+
+          <div class="field-grid two-cols">
+            <label class="field"><span>出发日期 *</span><div class="input-shell"><input name="start_date" type="date" value="2026-07-15" required></div></label>
+            <label class="field"><span>返回日期 *</span><div class="input-shell"><input name="end_date" type="date" value="2026-07-20" required></div></label>
+          </div>
+
+          <div class="field-grid two-cols">
+            <label class="field"><span>旅行风格</span><div class="input-shell select-shell"><select name="travel_style"><option value="comfort">舒适惬意</option><option value="budget">精打细算</option><option value="luxury">品质奢华</option><option value="cultural">人文探索</option><option value="adventure">户外冒险</option><option value="relaxation">放松度假</option></select></div></label>
+            <label class="field"><span>出行人数</span><div class="counter"><button type="button" data-count="minus" aria-label="减少人数">−</button><output id="traveler-count">2</output><button type="button" data-count="plus" aria-label="增加人数">＋</button></div></label>
+          </div>
+
+          <fieldset class="field interest-field">
+            <legend>感兴趣的体验</legend>
+            <div class="interest-options">
+              <label><input type="checkbox" value="美食" checked><span>🍜 美食</span></label>
+              <label><input type="checkbox" value="历史" checked><span>🏛 历史</span></label>
+              <label><input type="checkbox" value="自然"><span>🌿 自然</span></label>
+              <label><input type="checkbox" value="艺术"><span>🎨 艺术</span></label>
+              <label><input type="checkbox" value="购物"><span>🛍 购物</span></label>
+              <label><input type="checkbox" value="摄影"><span>📷 摄影</span></label>
+            </div>
+          </fieldset>
+
+          <label class="field"><span>还有什么想告诉我们？</span><textarea name="notes" rows="3" maxlength="500" placeholder="例如：喜欢安静的街区、希望安排一天自由活动……"></textarea></label>
+
+          <button id="plan-button" class="primary-button" type="submit"><span class="button-glow"></span><span class="button-label">开始 AI 规划</span><span class="button-arrow">→</span><span class="button-loader" aria-hidden="true"></span></button>
+          <button id="stop-button" class="stop-button" type="button" hidden>停止本次规划</button>
+          <p class="form-footnote">航班、酒店与价格为模拟数据，仅用于展示系统能力</p>
+        </form>
+      </aside>
+
+      <section class="output-card panel" aria-live="polite">
+        <div id="intro-view" class="intro-view">
+          <div class="panel-heading output-heading">
+            <div><span class="step-number warm">02</span><div><p>实时了解 AI 的工作</p><h2>你的专属规划台</h2></div></div>
+            <span class="status-pill ready"><i></i> 准备就绪</span>
+          </div>
+          <div class="intro-visual">
+            <div class="route-orbit"><span class="orbit-dot dot-one"></span><span class="orbit-dot dot-two"></span><div class="plane">✦</div></div>
+            <div class="intro-copy"><h3>一份好行程，来自恰到好处的协作</h3><p>提交需求后，你会在这里看见 7 个 Agent 如何理解偏好、检索知识、并行搜索，再共同把预算调整到合适的位置。</p></div>
+          </div>
+          <div class="agent-preview">
+            <div><span>01</span><i class="icon peach">♡</i><strong>偏好理解</strong><small>Preference</small></div>
+            <div><span>02</span><i class="icon amber">⌖</i><strong>目的地推荐</strong><small>RAG Enhanced</small></div>
+            <div><span>03</span><i class="icon sand">✈</i><strong>并行搜索</strong><small>3 Agents</small></div>
+            <div><span>04</span><i class="icon rose">¥</i><strong>预算优化</strong><small>Auto Replan</small></div>
+          </div>
+          <div class="architecture-note"><span>设计说明</span><p>右侧执行流展示的是可解释的状态、工具调用和结果摘要，不暴露模型私有思维链。</p></div>
+        </div>
+
+        <div id="planning-view" class="planning-view" hidden>
+          <div class="panel-heading output-heading">
+            <div><span class="step-number warm">02</span><div><p>实时执行过程</p><h2>AI 正在编织你的旅程</h2></div></div>
+            <span class="status-pill running"><i></i> 规划中</span>
+          </div>
+          <div class="progress-strip"><div id="progress-bar"></div></div>
+          <div class="planning-grid">
+            <section class="timeline-section"><div class="section-label"><span>AGENT TIMELINE</span><small id="elapsed-time">00:00</small></div><ol id="agent-timeline" class="agent-timeline"></ol></section>
+            <section class="summary-section"><div class="section-label"><span>LIVE ITINERARY</span><small>DeepSeek</small></div><article id="stream-summary" class="stream-summary"><span class="typing-cursor"></span></article></section>
+          </div>
+        </div>
+
+        <div id="result-view" class="result-view" hidden>
+          <div class="result-hero">
+            <div>
+              <span class="completion-badge">✓ 规划完成</span>
+              <p>为你推荐</p>
+              <h2 id="result-title">—</h2>
+              <span id="result-subtitle"></span>
+            </div>
+            <div class="budget-ring"><strong id="result-total">—</strong><span id="result-budget"></span></div>
+          </div>
+          <div class="result-tabs" role="tablist"><button class="active" data-result-tab="overview">行程概览</button><button data-result-tab="days">每日安排</button><button data-result-tab="trace">Agent 日志</button></div>
+          <div class="result-content" data-result-panel="overview">
+            <div class="recommendation-grid" id="result-tiles"></div>
+            <div class="highlights-card"><div class="highlights-head"><div><small>TRIP HIGHLIGHTS</small><h3>这趟旅程值得期待的瞬间</h3></div><span id="result-duration"></span></div><div class="highlight-list" id="result-highlights"></div></div>
+            <div class="budget-card"><div><small>预算分配</small><h3>每一笔花费都恰到好处</h3><p id="result-warnings" class="result-warnings"></p></div><div class="budget-bars" id="result-budget-bars"></div></div>
+          </div>
+          <div class="result-content" data-result-panel="days" hidden><div class="day-list" id="result-days"></div></div>
+          <div class="result-content" data-result-panel="trace" hidden><ol id="completed-trace" class="completed-trace"></ol></div>
+          <div class="result-actions"><button id="restart-button" class="secondary-action">重新规划</button></div>
+        </div>
+
+        <div id="error-view" class="error-view" role="alert" hidden><span>!</span><h2>这次规划暂时没有完成</h2><p id="error-message">连接似乎中断了，请稍后重新尝试。</p><button id="retry-button">重新规划</button></div>
+      </section>
+    </section>
+  </main>
+
+  <footer><span>WanderWarm Demo</span><p>FastAPI · DeepSeek · RAG · Multi-Agent Orchestration</p></footer>
+  <script src="./app.js"></script>
+</body>
+</html>

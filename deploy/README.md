@@ -2,10 +2,17 @@
 
 适用环境：Ubuntu 22.04（自带 Python 3.10），2核2G 即可。
 
+两个可独立运行的服务：
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| **WanderWarm Web**（推荐演示用） | 8000 | 原生前端 + SSE 实时 Agent 时间线 |
+| Streamlit | 8501 | 备用界面 + Trace Viewer |
+
 ## 1. 控制台准备
 
-- 防火墙放行 **TCP 8501**
-- 备案说明：用 `http://IP:8501` 访问无需备案；绑域名走 80/443 才需要 ICP 备案
+- 防火墙放行 **TCP 8000**（Web 演示）和 **TCP 8501**（Streamlit，可选）
+- 备案说明：用 `http://IP:端口` 访问无需备案；绑域名走 80/443 才需要 ICP 备案
 
 ## 2. 服务器初始化
 
@@ -47,11 +54,14 @@ streamlit run ui/streamlit_app.py --server.address 0.0.0.0 --server.port 8501 --
 ## 5. systemd 常驻
 
 ```bash
-cp ../deploy/travel-planner.service /etc/systemd/system/
+cp ../deploy/travel-planner-web.service /etc/systemd/system/   # Web 演示 (8000)
+cp ../deploy/travel-planner.service /etc/systemd/system/       # Streamlit (8501, 可选)
 systemctl daemon-reload
-systemctl enable --now travel-planner
-systemctl status travel-planner
+systemctl enable --now travel-planner-web travel-planner
+systemctl status travel-planner-web
 ```
+
+浏览器访问 `http://公网IP:8000` 即为 WanderWarm 演示页。
 
 ## 6. 日常更新
 

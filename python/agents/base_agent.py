@@ -19,6 +19,8 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from config.settings import settings
+from events import emit
+from events.messages import completed_message, started_message
 from models.schemas import TravelPlanState
 from observability import get_tracer
 
@@ -63,14 +65,19 @@ class BaseAgent(ABC):
         tracer = get_tracer()
         async with tracer.span(f"agent:{self.name}", kind="agent") as span:
             logger.info(f"[{self.name}] 开始执行...")
+            emit("agent_started", agent=self.name, message=started_message(self.name))
             try:
                 state = await self.execute(state)
                 logger.info(f"[{self.name}] 执行完成")
+                emit("agent_completed", agent=self.name,
+                     message=completed_message(self.name, state),
+                     data={"duration_ms": round(span.duration_ms, 1)})
             except Exception as exc:
                 span.status = "error"
                 span.error = f"{type(exc).__name__}: {exc}"
                 logger.error(f"[{self.name}] 执行失败: {exc}")
                 state.error_messages.append(f"{self.name}: {str(exc)}")
+                emit("agent_failed", agent=self.name, message="执行失败，已降级处理")
             span.set(state=state.state.value)
         return state
 

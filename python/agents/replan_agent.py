@@ -163,6 +163,10 @@ class ReplanAgent(BaseAgent):
                             result += "\n" + self._budget_line(breakdown)
                     span.set(arguments=args, result=result)
                 logger.info(f"[{self.name}] 第{step}步 → {tool_name}({args})")
+                from events import emit
+                emit("tool_called", agent=self.name,
+                     message=f"第 {step} 步：{tool_name}",
+                     data={"tool": tool_name, "arguments": args, "step": step})
                 messages.append({"role": "tool", "tool_call_id": call["id"], "content": result})
                 if finalized:
                     break

@@ -113,6 +113,12 @@ class KnowledgeBase:
                 span.set(strategy="bm25")
 
             span.set(hits=[(r.chunk.chunk_id, r.score) for r in results])
+
+            from events import emit  # 延迟导入避免环
+            emit("rag_result",
+                 agent="DestinationAgent",
+                 message=f"知识库命中 {len(results)} 条资料",
+                 data={"hits": [r.chunk.chunk_id for r in results]})
             return results
 
 
