@@ -1,0 +1,26 @@
+# systemd 服务单元 —— Streamlit 前端常驻 (崩溃自动重启, 开机自启)
+#
+# 安装步骤 (假设代码位于 /root/multi-agent-travel-planner):
+#   cp deploy/travel-planner.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now travel-planner
+#
+# 常用命令:
+#   systemctl status travel-planner      # 查看状态
+#   systemctl restart travel-planner     # 更新代码后重启
+#   journalctl -u travel-planner -f      # 实时日志
+#
+# 若部署路径不同, 修改下方两处路径即可。
+
+[Unit]
+Description=Multi-Agent Travel Planner (Streamlit)
+After=network.target
+
+[Service]
+WorkingDirectory=/root/multi-agent-travel-planner/python
+ExecStart=/root/multi-agent-travel-planner/python/.venv/bin/streamlit run ui/streamlit_app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

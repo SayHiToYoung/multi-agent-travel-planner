@@ -4,11 +4,17 @@ Streamlit 前端 —— 交互式行程规划界面。
 运行方式:
   cd python
   streamlit run ui/streamlit_app.py
+
+运行模式 (侧边栏切换):
+  - Mock 演示模式: 零成本, 规则评分 + BM25 检索, 无需任何 API Key
+  - 真实 LLM 模式: LLM+RAG 推荐 + ReplanAgent 工具调用循环;
+    设置了 DEMO_ACCESS_CODE 环境变量时需输入访问码解锁 (公网部署防刷)
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -16,13 +22,46 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
 
+from config.settings import settings
 from models.schemas import TravelPlanState, TravelStyle, UserPreferences
 from orchestrator.pipeline import TravelPlanningPipeline
+
+# 直接读环境变量而非 settings.LLM_PROVIDER:
+# Streamlit 每次交互都会重跑本脚本, 而 settings 是会被本页按运行模式改写的全局对象,
+# 环境变量才是稳定的"真实配置"来源
+_REAL_PROVIDER = os.getenv("LLM_PROVIDER", "mock")
+_ACCESS_CODE = os.getenv("DEMO_ACCESS_CODE", "")
 
 st.set_page_config(page_title="智能旅游行程规划", page_icon="✈️", layout="wide")
 
 st.title("✈️ 多Agent智能旅游行程规划系统")
-st.markdown("**6个AI Agent协作** | Pipeline + 并行搜索 + 预算循环")
+st.markdown("**7个AI Agent协作** | Pipeline编排 + 并行搜索 + RAG增强 + ReplanAgent自主调整 + 全链路Trace")
+
+# ── 侧边栏: 运行模式 ──────────────────────────────
+
+with st.sidebar:
+    st.subheader("⚙️ 运行模式")
+    real_available = _REAL_PROVIDER != "mock" and bool(settings.LLM_API_KEY)
+    use_real = False
+    if real_available:
+        if _ACCESS_CODE:
+            entered = st.text_input("访问码（解锁真实 LLM 模式）", type="password")
+            if entered:
+                use_real = entered == _ACCESS_CODE
+                if not use_real:
+                    st.error("访问码不正确")
+        else:
+            use_real = st.toggle("使用真实 LLM", value=True)
+
+    if use_real:
+        st.success(f"🧠 真实 LLM 模式\n\n模型: {settings.LLM_MODEL}\n\nLLM+RAG 推荐 + ReplanAgent 自主调整")
+    else:
+        st.info("🎭 Mock 演示模式（零成本）\n\n规则评分 + BM25 离线检索 + 规则降级")
+
+    st.divider()
+    st.caption("规划完成后, 可在 **Trace Viewer** 页查看本次运行的完整调用链 (各Agent耗时 / token消耗 / 工具调用路径)。")
+
+# ── 主区域 ────────────────────────────────────────
 
 st.divider()
 
@@ -45,7 +84,11 @@ with col1:
 
 with col2:
     if plan_btn:
-        with st.spinner("6个Agent正在协作规划您的行程..."):
+        # 按本次选择的模式切换 provider (单进程 demo 场景下的简化做法)
+        settings.LLM_PROVIDER = _REAL_PROVIDER if use_real else "mock"
+
+        mode_label = "真实 LLM" if use_real else "Mock 演示"
+        with st.spinner(f"7个Agent正在协作规划您的行程...（{mode_label}模式）"):
             prefs = UserPreferences(
                 budget=float(budget),
                 travel_style=TravelStyle(style),
@@ -59,13 +102,16 @@ with col2:
             pipeline = TravelPlanningPipeline()
             state: TravelPlanState = asyncio.run(pipeline.run(prefs))
 
-        st.success("行程规划完成!")
+        st.success(f"行程规划完成!（{mode_label}模式）")
 
         if state.selected_destination:
             d = state.selected_destination
             st.subheader(f"🌍 目的地: {d.city}, {d.country}")
             st.write(d.description)
-            st.write(f"**亮点:** {', '.join(d.highlights)}")
+            if d.highlights:
+                st.write(f"**亮点:** {', '.join(d.highlights)}")
+            if state.destination_rec and state.destination_rec.reasoning:
+                st.caption(f"💡 推荐理由: {state.destination_rec.reasoning}")
 
         tab1, tab2, tab3, tab4 = st.tabs(["✈️ 航班", "🏨 酒店", "📅 行程", "💰 预算"])
 
@@ -110,33 +156,40 @@ with col2:
                           delta_color="normal" if bb.remaining >= 0 else "inverse")
 
                 if state.adjustment_round > 0:
-                    st.info(f"经过 {state.adjustment_round} 轮预算调整")
+                    adj_label = ("ReplanAgent 自主调整" if use_real and settings.REPLAN_MODE == "agent"
+                                 else "规则渐进降级")
+                    st.info(f"经过 {state.adjustment_round} 轮预算调整（{adj_label}）")
 
         if state.error_messages:
             for msg in state.error_messages:
                 st.warning(msg)
+
+        st.caption("🔍 想看这次规划的内部过程? 左侧切到 **Trace Viewer** 页, 查看 Agent 调用树与决策路径。")
     else:
-        st.info("👈 请在左侧填写旅行偏好，然后点击"开始规划"")
+        st.info("👈 请在左侧填写旅行偏好，然后点击\"开始规划\"")
 
         st.subheader("🏗️ 系统架构")
         st.markdown("""
         ```
-        用户输入 → Preference Agent → Destination Agent
-        → [Flight + Hotel + Activity (并行)]
+        用户输入 → Preference Agent → Destination Agent (RAG增强)
+        → [Flight + Hotel + Activity (并行搜索)]
         → Budget Agent (预算校验)
-        ↓ (超预算则循环调整)
-        输出最终行程
+        ↓ 超预算?
+        ReplanAgent (LLM工具调用循环, 自主决策调整)
+        ↓
+        输出最终行程 + 完整 Trace
         ```
         """)
 
-        st.subheader("🤖 6个Agent")
+        st.subheader("🤖 7个Agent")
         agents_info = {
-            "Preference Agent": "收集用户偏好（预算/风格/时间）",
-            "Destination Agent": "推荐目的地（季节/签证/安全/性价比）",
-            "Flight Agent": "搜索航班、比价、推荐最优组合",
-            "Hotel Agent": "搜索酒店，匹配偏好",
-            "Activity Agent": "推荐景点/餐厅，生成每日行程",
-            "Budget Agent": "预算追踪，超预算自动调整",
+            "Preference Agent": "收集/补全用户偏好（预算/风格/兴趣）",
+            "Destination Agent": "RAG增强的目的地推荐（知识库检索 + LLM结构化输出, 失败回退规则评分）",
+            "Flight Agent": "航班搜索比价（价格/时长/中转加权评分）",
+            "Hotel Agent": "酒店匹配（风格-星级拟合 + 预算约束）",
+            "Activity Agent": "每日行程生成（时间槽分配 + 兴趣匹配）",
+            "Budget Agent": "预算校验与规则降级（Workflow 路径）",
+            "Replan Agent": "超预算时 LLM 工具调用循环自主调整（Agent 路径, 真实 LLM 模式启用）",
         }
         for name, desc in agents_info.items():
             st.write(f"- **{name}**: {desc}")
