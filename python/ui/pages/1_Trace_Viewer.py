@@ -18,8 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import streamlit as st
 
 from config.settings import settings
+from ui.theme import inject_theme
 
 st.set_page_config(page_title="Trace 查看器", page_icon="🔍", layout="wide")
+inject_theme()
 st.title("🔍 Trace 查看器")
 st.caption("一次规划 = 一条 trace。每个 Agent / LLM 调用 / RAG 检索 / 工具执行都是树上的一个 span。")
 

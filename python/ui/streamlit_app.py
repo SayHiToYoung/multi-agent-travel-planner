@@ -25,6 +25,7 @@ import streamlit as st
 from config.settings import settings
 from models.schemas import TravelPlanState, TravelStyle, UserPreferences
 from orchestrator.pipeline import TravelPlanningPipeline
+from ui.theme import inject_theme
 
 # 直接读环境变量而非 settings.LLM_PROVIDER:
 # Streamlit 每次交互都会重跑本脚本, 而 settings 是会被本页按运行模式改写的全局对象,
@@ -33,6 +34,7 @@ _REAL_PROVIDER = os.getenv("LLM_PROVIDER", "mock")
 _ACCESS_CODE = os.getenv("DEMO_ACCESS_CODE", "")
 
 st.set_page_config(page_title="智能旅游行程规划", page_icon="✈️", layout="wide")
+inject_theme()
 
 st.title("✈️ 多Agent智能旅游行程规划系统")
 st.markdown("**7个AI Agent协作** | Pipeline编排 + 并行搜索 + RAG增强 + ReplanAgent自主调整 + 全链路Trace")

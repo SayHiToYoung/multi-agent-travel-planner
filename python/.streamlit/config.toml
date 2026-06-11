@@ -1,0 +1,12 @@
+# Streamlit 主题 —— Sunset Apricot 暖色系
+# 仅影响视觉, 不涉及任何业务逻辑
+
+[theme]
+primaryColor = "#E07B39"            # 杏橙主色 (按钮/选中态/滑块)
+backgroundColor = "#FDF8F1"         # 奶油暖白页面底色
+secondaryBackgroundColor = "#F6EBDC" # 侧边栏/输入控件底色
+textColor = "#43332A"               # 深暖棕正文
+font = "sans serif"
+
+[server]
+headless = true
