@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+.venv/
+venv/
+ENV/
+
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Data
+*.db
+*.sqlite3
+data/
+# 知识库语料是源码的一部分, 不忽略
+!python/knowledge/data/
+python/knowledge/data/.embeddings_cache.json
+
+# 可观测性: 本地链路追踪输出
+python/traces/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# 本地资料, 不进仓库
+docs/
+plan.md
